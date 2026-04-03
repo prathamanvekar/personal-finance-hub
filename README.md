@@ -73,7 +73,7 @@ npm run lint
 
 ### 5) State Management
 
-Managed with React hooks (`useState`, `useMemo`, `useEffect`) for:
+Managed with React Context API (`FinanceDashboardProvider`) plus hooks for derived values for:
 
 - Transactions data
 - Filters and sorting
@@ -81,6 +81,11 @@ Managed with React hooks (`useState`, `useMemo`, `useEffect`) for:
 - Admin form state
 
 Computed data is memoized for clarity and efficiency.
+
+State source files:
+
+- `src/context/FinanceDashboardContext.jsx` for centralized app state and persistence
+- `src/App.jsx` for derived analytics and UI rendering
 
 ### 6) UI / UX Expectations
 
