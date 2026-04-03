@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useFinanceDashboard } from "./context/useFinanceDashboard.js";
+import CountUp from "./components/CountUp.jsx";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -298,17 +299,17 @@ function App() {
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <SummaryCard
             label="Total Balance"
-            value={formatMoney(totals.balance)}
+            amount={totals.balance}
             tone="balance"
           />
           <SummaryCard
             label="Total Income"
-            value={formatMoney(totals.income)}
+            amount={totals.income}
             tone="income"
           />
           <SummaryCard
             label="Total Expenses"
-            value={formatMoney(totals.expense)}
+            amount={totals.expense}
             tone="expense"
           />
         </section>
@@ -624,20 +625,33 @@ function App() {
   );
 }
 
-function SummaryCard({ label, value, tone }) {
+function SummaryCard({ label, amount, tone }) {
   const toneStyles = {
     balance: "from-cyan-500/25 to-cyan-500/0 border-cyan-300/30",
     income: "from-emerald-500/25 to-emerald-500/0 border-emerald-300/30",
     expense: "from-rose-500/25 to-rose-500/0 border-rose-300/30",
   };
 
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
+  const sign = safeAmount < 0 ? "-" : "";
+
   return (
     <article className={`panel-card bg-linear-to-br ${toneStyles[tone]}`}>
       <p className="text-xs uppercase tracking-widest text-slate-300">
         {label}
       </p>
-      <p className="mt-3 font-heading text-3xl font-semibold text-white">
-        {value}
+      <p className="count-up-text mt-3 font-heading text-3xl font-semibold text-white">
+        {sign}$
+        <CountUp
+          key={safeAmount}
+          from={0}
+          to={Math.abs(safeAmount)}
+          separator=","
+          direction="up"
+          duration={1}
+          className="inline"
+          startCounting={true}
+        />
       </p>
     </article>
   );
