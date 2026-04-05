@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFinanceDashboard } from "./context/useFinanceDashboard.js";
 import CountUp from "./components/CountUp.jsx";
 
@@ -23,6 +23,29 @@ function getMonthKey(dateString) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function makeSmoothPath(points) {
+  if (points.length === 0) return "";
+  if (points.length === 1) return `M ${points[0].x},${points[0].y}`;
+
+  let path = `M ${points[0].x},${points[0].y}`;
+
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const prev = points[i - 1] ?? points[i];
+    const current = points[i];
+    const next = points[i + 1];
+    const nextNext = points[i + 2] ?? next;
+
+    const cp1x = current.x + (next.x - prev.x) / 6;
+    const cp1y = current.y + (next.y - prev.y) / 6;
+    const cp2x = next.x - (nextNext.x - current.x) / 6;
+    const cp2y = next.y - (nextNext.y - current.y) / 6;
+
+    path += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${next.x},${next.y}`;
+  }
+
+  return path;
+}
+
 function emptyDraft() {
   return {
     date: new Date().toISOString().slice(0, 10),
@@ -34,6 +57,8 @@ function emptyDraft() {
 }
 
 function App() {
+  const ADMIN_SECRET = "0302";
+
   const {
     role,
     setRole,
@@ -52,6 +77,54 @@ function App() {
     draft,
     setDraft,
   } = useFinanceDashboard();
+  const [toasts, setToasts] = useState([]);
+  const [roleMenuOpen, setRoleMenuOpen] = useState(false);
+  const [adminCodeOpen, setAdminCodeOpen] = useState(false);
+  const [secretCode, setSecretCode] = useState("");
+  const [authError, setAuthError] = useState("");
+  const roleMenuRef = useRef(null);
+  const codeInputRef = useRef(null);
+
+  const roleMeta = {
+    viewer: {
+      title: "Viewer",
+      subtitle: "Read only",
+    },
+    admin: {
+      title: "Admin",
+      subtitle: "Can add and edit",
+    },
+  };
+
+  useEffect(() => {
+    function handleDocumentClick(event) {
+      if (roleMenuRef.current && !roleMenuRef.current.contains(event.target)) {
+        setRoleMenuOpen(false);
+      }
+    }
+
+    function handleEscape(event) {
+      if (event.key === "Escape") {
+        setRoleMenuOpen(false);
+        setAdminCodeOpen(false);
+        setAuthError("");
+      }
+    }
+
+    document.addEventListener("mousedown", handleDocumentClick);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handleDocumentClick);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (adminCodeOpen) {
+      codeInputRef.current?.focus();
+    }
+  }, [adminCodeOpen]);
 
   const categories = useMemo(() => {
     return [...new Set(transactions.map((t) => t.category))].sort((a, b) =>
@@ -180,29 +253,43 @@ function App() {
     };
   }, [spendingByCategory, trendData, totals.balance, totals.income]);
 
-  const linePoints = useMemo(() => {
-    if (trendData.length === 0) return "";
+  const chartPoints = useMemo(() => {
+    if (trendData.length === 0) return [];
 
     const maxBalance = Math.max(...trendData.map((d) => d.balance), 1);
     const minBalance = Math.min(...trendData.map((d) => d.balance), 0);
     const spread = maxBalance - minBalance || 1;
 
-    return trendData
-      .map((point, index) => {
-        const x =
-          trendData.length === 1 ? 50 : (index / (trendData.length - 1)) * 100;
-        const y = 100 - ((point.balance - minBalance) / spread) * 100;
-        return `${x},${y}`;
-      })
-      .join(" ");
+    return trendData.map((point, index) => {
+      const x =
+        trendData.length === 1 ? 50 : (index / (trendData.length - 1)) * 100;
+      const y = 100 - ((point.balance - minBalance) / spread) * 100;
+      return { x, y };
+    });
   }, [trendData]);
 
+  const linePath = useMemo(() => makeSmoothPath(chartPoints), [chartPoints]);
+
   const areaPath = useMemo(() => {
-    if (trendData.length === 0) return "";
-    return `M 0,100 L ${linePoints} L 100,100 Z`;
-  }, [linePoints, trendData.length]);
+    if (chartPoints.length === 0) return "";
+
+    const smooth = makeSmoothPath(chartPoints);
+    const firstPoint = chartPoints[0];
+    const lastPoint = chartPoints[chartPoints.length - 1];
+
+    return `${smooth} L ${lastPoint.x},100 L ${firstPoint.x},100 Z`;
+  }, [chartPoints]);
 
   const isAdmin = role === "admin";
+
+  function addToast(message, type = "success") {
+    const id = crypto.randomUUID();
+    setToasts((prev) => [...prev, { id, message, type }]);
+
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((toast) => toast.id !== id));
+    }, 2800);
+  }
 
   function resetDraft() {
     setDraft(emptyDraft());
@@ -232,6 +319,7 @@ function App() {
             : t,
         ),
       );
+      addToast("Transaction updated", "info");
     } else {
       const item = {
         id: crypto.randomUUID(),
@@ -240,6 +328,7 @@ function App() {
         note: draft.note.trim() || "No note",
       };
       setTransactions((prev) => [item, ...prev]);
+      addToast("Transaction created", "success");
     }
 
     resetDraft();
@@ -257,10 +346,58 @@ function App() {
     });
   }
 
+  function removeTransaction(id) {
+    if (!isAdmin) return;
+    setTransactions((prev) => prev.filter((t) => t.id !== id));
+
+    if (editingId === id) {
+      resetDraft();
+    }
+
+    addToast("Transaction deleted", "danger");
+  }
+
+  function changeRole(nextRole) {
+    if (nextRole === role) {
+      setRoleMenuOpen(false);
+      return;
+    }
+
+    if (role === "viewer" && nextRole === "admin") {
+      setRoleMenuOpen(false);
+      setSecretCode("");
+      setAuthError("");
+      setAdminCodeOpen(true);
+      return;
+    }
+
+    setRole(nextRole);
+    setRoleMenuOpen(false);
+    resetDraft();
+    addToast(`Switched to ${roleMeta[nextRole].title} mode`, "info");
+  }
+
+  function handleAdminCodeSubmit(event) {
+    event.preventDefault();
+
+    if (secretCode.trim() !== ADMIN_SECRET) {
+      setAuthError("Invalid code. Please try again.");
+      addToast("Invalid admin secret code", "danger");
+      return;
+    }
+
+    setRole("admin");
+    setAdminCodeOpen(false);
+    setSecretCode("");
+    setAuthError("");
+    resetDraft();
+    addToast("Admin access granted", "success");
+  }
+
   return (
     <div className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto w-full max-w-11xl rounded-3xl p-4 sm:p-6 lg:p-8">
-        <header className="mb-8 flex flex-col gap-4 border-b border-white/20 pb-6 lg:flex-row lg:items-end lg:justify-between">
+        <header className="relative z-40 mb-8 flex flex-col gap-4 border-b border-white/20 pb-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-sm uppercase tracking-[0.22em] text-slate-300">
               Personal Finance Hub
@@ -274,25 +411,70 @@ function App() {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur-lg sm:p-4">
+          <div className="relative z-50 rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur-lg sm:p-4">
             <label
               className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-300"
-              htmlFor="role"
+              id="role-label"
             >
               Demo Role
             </label>
-            <select
-              id="role"
-              value={role}
-              onChange={(e) => {
-                setRole(e.target.value);
-                resetDraft();
-              }}
-              className="w-full rounded-xl border border-white/20 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-400"
-            >
-              <option value="viewer">Viewer (read only)</option>
-              <option value="admin">Admin (add/edit)</option>
-            </select>
+            <div ref={roleMenuRef} className="role-dropdown-wrap">
+              <button
+                type="button"
+                aria-labelledby="role-label"
+                aria-haspopup="listbox"
+                aria-expanded={roleMenuOpen}
+                onClick={() => setRoleMenuOpen((prev) => !prev)}
+                className="role-trigger"
+              >
+                <span>
+                  <span className="block text-sm font-semibold text-white">
+                    {roleMeta[role].title}
+                  </span>
+                  <span className="block text-xs text-slate-300">
+                    {roleMeta[role].subtitle}
+                  </span>
+                </span>
+                <svg
+                  viewBox="0 0 20 20"
+                  className={`role-caret ${roleMenuOpen ? "role-caret-open" : ""}`}
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M5 7.5 10 12.5 15 7.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+
+              <div
+                className={`role-menu ${roleMenuOpen ? "role-menu-open" : ""}`}
+                role="listbox"
+                aria-label="Select role"
+              >
+                {Object.entries(roleMeta).map(([value, meta]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="option"
+                    aria-selected={role === value}
+                    className={`role-option ${role === value ? "role-option-active" : ""}`}
+                    onClick={() => changeRole(value)}
+                  >
+                    <span className="block text-sm font-semibold">
+                      {meta.title}
+                    </span>
+                    <span className="block text-xs text-slate-300">
+                      {meta.subtitle}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </header>
 
@@ -341,14 +523,24 @@ function App() {
                     </linearGradient>
                   </defs>
                   <path d={areaPath} fill="url(#trendGradient)" />
-                  <polyline
+                  <path
+                    d={linePath}
                     fill="none"
                     stroke="#22d3ee"
                     strokeWidth="2.2"
-                    points={linePoints}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
+                  {chartPoints.map((point, index) => (
+                    <circle
+                      key={`${trendData[index].month}-point`}
+                      cx={point.x}
+                      cy={point.y}
+                      r="1.2"
+                      fill="#22d3ee"
+                      opacity="0.95"
+                    />
+                  ))}
                 </svg>
                 <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-slate-300 sm:grid-cols-6">
                   {trendData.map((point) => (
@@ -392,8 +584,8 @@ function App() {
                       </div>
                       <div className="h-2 rounded-full bg-slate-800">
                         <div
-                          className="h-2 rounded-full bg-linear-to-r from-cyan-400 to-emerald-400"
-                          style={{ width: `${percent}%` }}
+                          className="spending-bar-fill h-2 rounded-full bg-linear-to-r from-cyan-400 to-emerald-400"
+                          style={{ "--target-width": `${percent}%` }}
                         />
                       </div>
                     </div>
@@ -498,13 +690,22 @@ function App() {
                         </td>
                         {isAdmin ? (
                           <td className="px-3 py-3 text-right">
-                            <button
-                              type="button"
-                              onClick={() => startEdit(t)}
-                              className="rounded-lg border border-cyan-300/40 px-3 py-1 text-xs text-cyan-200 transition hover:bg-cyan-500/10"
-                            >
-                              Edit
-                            </button>
+                            <div className="flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => startEdit(t)}
+                                className="rounded-lg border border-cyan-300/40 px-3 py-1 text-xs text-cyan-200 transition hover:bg-cyan-500/10"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeTransaction(t.id)}
+                                className="rounded-lg border border-rose-300/40 px-3 py-1 text-xs text-rose-200 transition hover:bg-rose-500/10"
+                              >
+                                Delete
+                              </button>
+                            </div>
                           </td>
                         ) : null}
                       </tr>
@@ -621,6 +822,68 @@ function App() {
           </article>
         </section>
       </div>
+
+      {adminCodeOpen ? (
+        <div
+          className="auth-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="admin-auth-title"
+        >
+          <div className="auth-modal">
+            <h3
+              id="admin-auth-title"
+              className="font-heading text-xl text-white"
+            >
+              Admin Access Required
+            </h3>
+            <p className="mt-2 text-sm text-slate-300">
+              Enter the secret code to switch from Viewer to Admin mode.
+            </p>
+
+            <form className="mt-4 space-y-3" onSubmit={handleAdminCodeSubmit}>
+              <input
+                ref={codeInputRef}
+                type="password"
+                value={secretCode}
+                onChange={(e) => {
+                  setSecretCode(e.target.value);
+                  if (authError) setAuthError("");
+                }}
+                placeholder="Enter secret code"
+                className="filter-input"
+              />
+
+              {authError ? (
+                <p className="text-xs text-rose-300">{authError}</p>
+              ) : null}
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="action-btn action-muted"
+                  onClick={() => {
+                    setAdminCodeOpen(false);
+                    setSecretCode("");
+                    setAuthError("");
+                  }}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="action-btn action-primary">
+                  Unlock Admin
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="fixed right-4 bottom-4 z-50 flex w-full max-w-xs flex-col gap-2 sm:right-6 sm:bottom-6">
+        {toasts.map((toast) => (
+          <Toast key={toast.id} toast={toast} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -670,6 +933,23 @@ function EmptyState({ label }) {
   return (
     <div className="rounded-2xl border border-dashed border-white/25 bg-white/5 p-6 text-center text-sm text-slate-300">
       {label}
+    </div>
+  );
+}
+
+function Toast({ toast }) {
+  const toneClass =
+    toast.type === "danger"
+      ? "border-rose-300/50 bg-rose-950/80"
+      : toast.type === "info"
+        ? "border-cyan-300/50 bg-cyan-950/70"
+        : "border-emerald-300/50 bg-emerald-950/70";
+
+  return (
+    <div
+      className={`rounded-xl border px-3 py-2 text-sm text-white shadow-lg backdrop-blur toast-slide-in ${toneClass}`}
+    >
+      {toast.message}
     </div>
   );
 }

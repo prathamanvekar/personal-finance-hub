@@ -5,6 +5,102 @@ const STORAGE_KEY = "finance-dashboard-v1";
 
 const initialTransactions = [
   {
+    id: "t-1",
+    date: "2025-07-02",
+    amount: 3900,
+    category: "Salary",
+    type: "income",
+    note: "July salary",
+  },
+  {
+    id: "t-2",
+    date: "2025-07-12",
+    amount: 120,
+    category: "Food",
+    type: "expense",
+    note: "Groceries",
+  },
+  {
+    id: "t-3",
+    date: "2025-08-03",
+    amount: 4000,
+    category: "Salary",
+    type: "income",
+    note: "August salary",
+  },
+  {
+    id: "t-4",
+    date: "2025-08-18",
+    amount: 310,
+    category: "Utilities",
+    type: "expense",
+    note: "Power bill",
+  },
+  {
+    id: "t-5",
+    date: "2025-09-03",
+    amount: 4050,
+    category: "Salary",
+    type: "income",
+    note: "September salary",
+  },
+  {
+    id: "t-6",
+    date: "2025-09-21",
+    amount: 460,
+    category: "Shopping",
+    type: "expense",
+    note: "Season sale",
+  },
+  {
+    id: "t-7",
+    date: "2025-10-04",
+    amount: 4100,
+    category: "Salary",
+    type: "income",
+    note: "October salary",
+  },
+  {
+    id: "t-8",
+    date: "2025-10-13",
+    amount: 210,
+    category: "Transport",
+    type: "expense",
+    note: "Fuel + parking",
+  },
+  {
+    id: "t-9",
+    date: "2025-11-05",
+    amount: 4200,
+    category: "Salary",
+    type: "income",
+    note: "November salary",
+  },
+  {
+    id: "t-10",
+    date: "2025-11-22",
+    amount: 540,
+    category: "Travel",
+    type: "expense",
+    note: "Family trip",
+  },
+  {
+    id: "t-11",
+    date: "2025-12-03",
+    amount: 4250,
+    category: "Salary",
+    type: "income",
+    note: "December salary",
+  },
+  {
+    id: "t-12",
+    date: "2025-12-29",
+    amount: 330,
+    category: "Entertainment",
+    type: "expense",
+    note: "Year-end events",
+  },
+  {
     id: "t1",
     date: "2026-01-04",
     amount: 4300,
@@ -150,6 +246,21 @@ function readPersistedDashboardState() {
   }
 }
 
+function mergeHistoricalSeed(savedTransactions) {
+  const historicalSeed = initialTransactions.filter((t) =>
+    t.id.startsWith("t-"),
+  );
+  const hasHistoricalMonths = savedTransactions.some(
+    (t) => new Date(t.date) < new Date("2026-01-01"),
+  );
+
+  if (hasHistoricalMonths) {
+    return savedTransactions;
+  }
+
+  return [...historicalSeed, ...savedTransactions];
+}
+
 export function FinanceDashboardProvider({ children }) {
   const [role, setRole] = useState(() => {
     const saved = readPersistedDashboardState();
@@ -159,7 +270,7 @@ export function FinanceDashboardProvider({ children }) {
   const [transactions, setTransactions] = useState(() => {
     const saved = readPersistedDashboardState();
     return Array.isArray(saved?.transactions) && saved.transactions.length > 0
-      ? saved.transactions
+      ? mergeHistoricalSeed(saved.transactions)
       : initialTransactions;
   });
 
