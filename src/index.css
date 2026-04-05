@@ -107,6 +107,12 @@ body {
   background: rgba(8, 16, 28, 0.6);
 }
 
+.role-block-entrance {
+  opacity: 0;
+  transform: translateY(10px);
+  animation: roleBlockIn 0.45s ease-out 0.24s forwards;
+}
+
 .role-dropdown-wrap {
   position: relative;
   isolation: isolate;
@@ -273,6 +279,17 @@ body {
   }
 }
 
+@keyframes roleBlockIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes fillBar {
   from {
     width: 0;
@@ -301,5 +318,13 @@ body {
   .role-menu {
     right: auto;
     min-width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .role-block-entrance {
+    opacity: 1;
+    transform: none;
+    animation: none;
   }
 }

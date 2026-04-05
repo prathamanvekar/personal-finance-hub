@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFinanceDashboard } from "./context/useFinanceDashboard.js";
 import CountUp from "./components/CountUp.jsx";
+import SplitText from "./components/SplitText.jsx";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -94,6 +95,10 @@ function App() {
       title: "Admin",
       subtitle: "Can add and edit",
     },
+  };
+
+  const handleAnimationComplete = () => {
+    console.log("All letters have animated!");
   };
 
   useEffect(() => {
@@ -399,19 +404,53 @@ function App() {
       <div className="mx-auto w-full max-w-11xl rounded-3xl p-4 sm:p-6 lg:p-8">
         <header className="relative z-40 mb-8 flex flex-col gap-4 border-b border-white/20 pb-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-sm uppercase tracking-[0.22em] text-slate-300">
-              Personal Finance Hub
-            </p>
-            <h1 className="mt-2 font-heading text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-              Finance Dashboard
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm text-slate-300 sm:text-base">
-              Track cash flow, inspect transactions, and spot spending trends at
-              a glance.
-            </p>
+            <SplitText
+              text="Personal Finance Hub"
+              tag="p"
+              className="text-sm uppercase tracking-[0.22em] text-slate-300"
+              delay={18}
+              duration={0.75}
+              ease="power2.out"
+              splitType="chars"
+              from={{ opacity: 0, y: 14 }}
+              to={{ opacity: 1, y: 0 }}
+              threshold={0.05}
+              rootMargin="-20px"
+              textAlign="left"
+            />
+            <SplitText
+              text="Finance Dashboard"
+              tag="h1"
+              className="mt-2 font-heading text-3xl font-semibold tracking-tight text-white sm:text-4xl"
+              delay={24}
+              duration={0.95}
+              ease="power3.out"
+              splitType="chars"
+              from={{ opacity: 0, y: 22 }}
+              to={{ opacity: 1, y: 0 }}
+              threshold={0.05}
+              rootMargin="-20px"
+              textAlign="left"
+              onLetterAnimationComplete={handleAnimationComplete}
+              showCallback
+            />
+            <SplitText
+              text="Track cash flow, inspect transactions, and spot spending trends at a glance."
+              tag="p"
+              className="mt-3 max-w-2xl text-sm text-slate-300 sm:text-base"
+              delay={8}
+              duration={0.8}
+              ease="power2.out"
+              splitType="words"
+              from={{ opacity: 0, y: 12 }}
+              to={{ opacity: 1, y: 0 }}
+              threshold={0.05}
+              rootMargin="-20px"
+              textAlign="left"
+            />
           </div>
 
-          <div className="relative z-50 rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur-lg sm:p-4">
+          <div className="role-block-entrance relative z-50 rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur-lg sm:p-4">
             <label
               className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-300"
               id="role-label"
